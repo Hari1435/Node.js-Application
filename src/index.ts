@@ -3,6 +3,7 @@ import { startStandaloneServer } from '@apollo/server/standalone';
 import { typeDefs } from './graphql/schema';
 import { resolvers } from './graphql/resolvers';
 import { prisma } from './lib/prisma';
+import { authMiddleware } from './middleware/auth.middleware';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -16,9 +17,13 @@ async function startServer() {
   const { url } = await startStandaloneServer(server, {
     listen: { port: Number(process.env.PORT) || 4000 },
     context: async ({ req }) => {
+      // Apply auth middleware
+      const authContext = await authMiddleware(req);
+      
       return {
         prisma,
         req,
+        ...authContext,
       };
     },
   });

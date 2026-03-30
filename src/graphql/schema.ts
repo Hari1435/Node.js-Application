@@ -1,12 +1,27 @@
 export const typeDefs = `#graphql
+  enum Gender {
+    MALE
+    FEMALE
+    OTHER
+  }
+
+  enum Qualification {
+    HIGH_SCHOOL
+    DIPLOMA
+    BACHELORS
+    MASTERS
+    PHD
+    OTHER
+  }
+
   type User {
     id: ID!
     mobileNumber: String!
     isVerified: Boolean!
     name: String
-    gender: String
+    gender: Gender
     dateOfBirth: String
-    qualification: String
+    qualification: Qualification
     course: String
     specialization: String
     latitude: Float
@@ -29,9 +44,9 @@ export const typeDefs = `#graphql
 
   input OnboardingInput {
     name: String!
-    gender: String!
+    gender: Gender!
     dateOfBirth: String!
-    qualification: String!
+    qualification: Qualification!
     course: String!
     specialization: String!
     latitude: Float!
@@ -39,7 +54,7 @@ export const typeDefs = `#graphql
   }
 
   type Query {
-    me(token: String!): User
+    me: User
   }
 
   type Mutation {
@@ -50,6 +65,6 @@ export const typeDefs = `#graphql
     verifyOTP(mobileNumber: String!, code: String!): VerifyOTPResponse!
     
     # Step 3: Complete onboarding
-    completeOnboarding(token: String!, input: OnboardingInput!): User!
+    completeOnboarding(input: OnboardingInput!): User!
   }
 `;

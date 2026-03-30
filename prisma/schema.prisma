@@ -7,28 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Qualification {
+  HIGH_SCHOOL
+  DIPLOMA
+  BACHELORS
+  MASTERS
+  PHD
+  OTHER
+}
+
 model User {
-  id              String    @id @default(uuid())
-  mobileNumber    String    @unique
-  isVerified      Boolean   @default(false)
+  id              String          @id @default(uuid())
+  mobileNumber    String          @unique
+  isVerified      Boolean         @default(false)
   
   // OTP fields
   otpCode         String?
   otpExpiresAt    DateTime?
-  otpIsUsed       Boolean   @default(false)
+  otpIsUsed       Boolean         @default(false)
   
   // Profile fields
   name            String?
-  gender          String?
+  gender          Gender?
   dateOfBirth     DateTime?
-  qualification   String?
+  qualification   Qualification?
   course          String?
   specialization  String?
   latitude        Float?
   longitude       Float?
   
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   
   @@index([mobileNumber])
 }

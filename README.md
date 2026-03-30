@@ -15,7 +15,10 @@ A Node.js application with Apollo GraphQL, TypeScript, Prisma, and MySQL impleme
 - **User**: Single table containing all user data including:
   - Authentication: mobile number, verification status
   - OTP: code, expiration, usage status
-  - Profile: name, gender, date of birth, education, location
+  - Profile: name, gender (enum), date of birth, qualification (enum), course, specialization, location
+- **Enums**:
+  - Gender: MALE, FEMALE, OTHER
+  - Qualification: HIGH_SCHOOL, DIPLOMA, BACHELORS, MASTERS, PHD, OTHER
 
 ## 📋 Prerequisites
 
@@ -110,8 +113,8 @@ mutation VerifyOTP($mobileNumber: String!, $code: String!) {
 
 #### 3. Complete Onboarding
 ```graphql
-mutation CompleteOnboarding($token: String!, $input: OnboardingInput!) {
-  completeOnboarding(token: $token, input: $input) {
+mutation CompleteOnboarding($input: OnboardingInput!) {
+  completeOnboarding(input: $input) {
     id
     mobileNumber
     isVerified
@@ -129,12 +132,11 @@ mutation CompleteOnboarding($token: String!, $input: OnboardingInput!) {
 **Variables:**
 ```json
 {
-  "token": "your-jwt-token-here",
   "input": {
     "name": "John Doe",
-    "gender": "Male",
+    "gender": "MALE",
     "dateOfBirth": "1995-05-15",
-    "qualification": "Bachelor's Degree",
+    "qualification": "BACHELORS",
     "course": "Computer Science",
     "specialization": "Software Engineering",
     "latitude": 12.9716,
@@ -142,11 +144,17 @@ mutation CompleteOnboarding($token: String!, $input: OnboardingInput!) {
   }
 }
 ```
+**HTTP Headers:**
+```json
+{
+  "Authorization": "Bearer your-jwt-token-here"
+}
+```
 
 #### 4. Get Current User
 ```graphql
-query GetMyProfile($token: String!) {
-  me(token: $token) {
+query GetMyProfile {
+  me {
     id
     mobileNumber
     isVerified
@@ -161,10 +169,10 @@ query GetMyProfile($token: String!) {
   }
 }
 ```
-**Variables:**
+**HTTP Headers:**
 ```json
 {
-  "token": "your-jwt-token-here"
+  "Authorization": "Bearer your-jwt-token-here"
 }
 ```
 
@@ -174,34 +182,45 @@ query GetMyProfile($token: String!) {
 ```
 ├── src/
 │   ├── graphql/
-│   │   ├── schema.ts       # GraphQL type definitions
-│   │   └── resolvers.ts    # GraphQL resolvers
+│   │   ├── schema.ts              # GraphQL type definitions
+│   │   └── resolvers/
+│   │       ├── index.ts           # Resolver exports (imports only)
+│   │       ├── queries.ts         # Query resolvers
+│   │       └── mutations.ts       # Mutation resolvers
 │   ├── services/
-│   │   ├── auth.service.ts # JWT authentication logic
-│   │   ├── otp.service.ts  # OTP generation & verification
-│   │   └── user.service.ts # User management
+│   │   ├── auth.service.ts        # JWT authentication logic
+│   │   ├── otp.service.ts         # OTP generation & verification
+│   │   └── user.service.ts        # User management
+│   ├── middleware/
+│   │   └── auth.middleware.ts     # Authentication middleware
 │   ├── lib/
-│   │   └── prisma.ts       # Prisma client instance
-│   └── index.ts            # Server entry point
+│   │   └── prisma.ts              # Prisma client instance
+│   └── index.ts                   # Server entry point
 ├── prisma/
-│   └── schema.prisma       # Database schema (single User table)
+│   └── schema.prisma              # Database schema (User table + enums)
 └── package.json
 ```
 
 ### Key Concepts
 
 1. **Single Table Design**: All user data (auth, OTP, profile) in one User table
-2. **OTP Service**: Generates 6-digit codes, stores in User table with expiration (10 min)
-3. **Auth Service**: Handles JWT token generation and verification
-4. **User Service**: Manages user onboarding by updating User table
-5. **GraphQL Resolvers**: Connect GraphQL operations to service functions
+2. **Enum Types**: Gender and Qualification use database enums for data consistency
+3. **OTP Service**: Generates 6-digit codes, stores in User table with expiration (10 min)
+4. **Auth Middleware**: Extracts JWT token from Authorization header and adds user to context
+5. **Split Resolvers**: Queries and mutations are in separate files for better organization
+6. **Context-based Auth**: Protected routes use context.user instead of token parameters
 
 ## 🧪 Testing with Apollo Studio
 
 1. Open `http://localhost:4000` in your browser
 2. Copy queries from `sample-queries.graphql`
 3. Use the **Variables** tab to provide input values
-4. Follow the authentication flow in order: sendOTP → verifyOTP → completeOnboarding → me
+4. For authenticated requests (completeOnboarding, me), add token in **HTTP Headers** tab:
+   ```json
+   { "Authorization": "Bearer YOUR_TOKEN_HERE" }
+   ```
+5. Follow the authentication flow in order: sendOTP → verifyOTP → completeOnboarding → me
+6. Use enum values: Gender (MALE, FEMALE, OTHER), Qualification (HIGH_SCHOOL, DIPLOMA, BACHELORS, MASTERS, PHD, OTHER)
 
 ## 📱 Production Considerations
 
@@ -217,7 +236,9 @@ query GetMyProfile($token: String!) {
 - OTPs can only be used once (stored in User table)
 - JWT tokens expire in 30 days
 - Mobile numbers are unique per user
-- Single table design simplifies data management
+- Authentication via middleware (Bearer token in Authorization header)
+- Protected routes require valid JWT token in context
+- Enum types ensure data consistency for gender and qualification
 
 ## 📚 Next Steps
 
