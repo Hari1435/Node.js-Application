@@ -1,10 +1,11 @@
 import { prisma } from '../lib/prisma';
+import { Gender, Qualification } from '@prisma/client';
 
 interface OnboardingData {
   name: string;
-  gender: string;
+  gender: Gender;
   dateOfBirth: string;
-  qualification: string;
+  qualification: Qualification;
   course: string;
   specialization: string;
   latitude: number;
