@@ -1,30 +1,26 @@
+import { PrismaClient, User } from '@prisma/client';
 import { AuthService } from '../services/auth.service';
+import { IncomingMessage } from 'http';
 
-export interface AuthContext {
-  user?: any;
-  token?: string;
+interface AuthContext {
+  user: User | null;
+  token: string | null;
 }
 
-export const authMiddleware = async (req: any): Promise<AuthContext> => {
-  const context: AuthContext = {};
+export async function authMiddleware(req: IncomingMessage, prisma: PrismaClient): Promise<AuthContext> {
+  const authHeader = (req.headers as Record<string, string | string[] | undefined>).authorization;
+  const token = typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined;
 
-  try {
-    // Get token from Authorization header
-    const authHeader = req.headers.authorization || '';
-    
-    if (authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      context.token = token;
-
-      // Verify token and get user
-      const user = await AuthService.getUserFromToken(token);
-      context.user = user;
-    }
-  } catch (error) {
-    // Token is invalid or expired, but don't throw error
-    // Let resolvers handle authentication requirements
-    console.log('Auth middleware: Invalid or expired token');
+  if (!token) {
+    return { user: null, token: null };
   }
 
-  return context;
-};
+  try {
+    const user = await AuthService.getUserFromToken(token, prisma);
+    return { user, token };
+  } catch (error) {
+    const { message } = error as Error;
+    console.error('Auth middleware error:', { message });
+    return { user: null, token: null };
+  }
+}

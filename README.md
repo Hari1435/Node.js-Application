@@ -1,6 +1,6 @@
 # GraphQL Authentication & Onboarding System
 
-A Node.js application with Apollo GraphQL, TypeScript, Prisma, and MySQL implementing OTP-based authentication and user onboarding.
+A Node.js application with Apollo GraphQL, TypeScript, Prisma, and MySQL implementing OTP-based authentication and user onboarding with proper type safety and clean architecture.
 
 ## 🏗️ Architecture
 
@@ -12,13 +12,33 @@ A Node.js application with Apollo GraphQL, TypeScript, Prisma, and MySQL impleme
 - **JWT**: Token-based authentication
 
 ### Database Schema
-- **User**: Single table containing all user data including:
-  - Authentication: mobile number, verification status
-  - OTP: code, expiration, usage status
-  - Profile: name, gender (enum), date of birth, qualification (enum), course, specialization, location
-- **Enums**:
-  - Gender: MALE, FEMALE, OTHER
-  - Qualification: HIGH_SCHOOL, DIPLOMA, BACHELORS, MASTERS, PHD, OTHER
+
+#### Models
+- **User**: Core user data
+  - Authentication: mobile number, verification status, user status
+  - Profile: name, gender, date of birth, qualification (relation), course, specialization, location
+  - Relations: qualification (many-to-one), otps (one-to-many)
+
+- **OTP**: Separate tracking for OTP history
+  - Fields: code, expiration, usage status, verification timestamp
+  - Relation: user (many-to-one)
+
+- **Qualification**: Dynamic qualification management
+  - Fields: name, description, active status
+  - Relation: users (one-to-many)
+
+#### Enums
+- **Gender**: MALE, FEMALE, OTHER
+- **UserStatus**: PENDING_VERIFICATION, VERIFIED, ONBOARDING_INCOMPLETE, ACTIVE, INACTIVE, SUSPENDED
+
+### Key Features
+- ✅ Separate OTP model for better tracking and audit trail
+- ✅ Qualification as separate model (not enum) for flexibility
+- ✅ User status tracking throughout lifecycle
+- ✅ Prisma client passed via GraphQL context
+- ✅ No "any" types - full type safety
+- ✅ Proper error logging with destructuring
+- ✅ Organized types folder structure
 
 ## 📋 Prerequisites
 
@@ -36,27 +56,20 @@ npm install
 ### Step 2: Configure Database
 1. Create a MySQL database:
 ```sql
-CREATE DATABASE auth_onboarding_db;
+CREATE DATABASE Node_DB;
 ```
 
-2. Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-
-3. Update `.env` with your database credentials:
-```
-DATABASE_URL="mysql://root:password@localhost:3306/auth_onboarding_db"
-JWT_SECRET="your-secret-key-here"
+2. Create `.env` file in root directory:
+```env
+DATABASE_URL="mysql://root:password@localhost:3306/Node_DB"
+JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
 PORT=4000
 ```
 
-**Using MySQL Workbench?** See `MYSQL_WORKBENCH_SETUP.md` for detailed setup guide.
-
 ### Step 3: Run Database Migrations
 ```bash
-npm run prisma:generate
-npm run prisma:migrate
+npx prisma generate
+npx prisma migrate dev
 ```
 
 ### Step 4: Start Development Server
@@ -66,11 +79,49 @@ npm run dev
 
 Server will start at: `http://localhost:4000`
 
-## 📝 API Flow
+## 📝 Complete API Workflow
 
-### Authentication Flow
+### Step 0: Setup Qualifications (One-time Admin Task)
 
-#### 1. Send OTP
+Create qualifications that users can select during onboarding:
+
+```graphql
+mutation CreateQualification($input: CreateQualificationInput!) {
+  createQualification(input: $input) {
+    id
+    name
+    description
+  }
+}
+```
+
+**Variables (run for each qualification):**
+```json
+{ "input": { "name": "High School", "description": "High School or Secondary Education" } }
+{ "input": { "name": "Diploma", "description": "Diploma or Certificate Program" } }
+{ "input": { "name": "Bachelor's Degree", "description": "Undergraduate Bachelor's Degree" } }
+{ "input": { "name": "Master's Degree", "description": "Postgraduate Master's Degree" } }
+{ "input": { "name": "PhD", "description": "Doctoral Degree" } }
+{ "input": { "name": "Other", "description": "Other Educational Qualification" } }
+```
+
+### Step 1: Get Available Qualifications
+
+```graphql
+query GetQualifications {
+  qualifications {
+    id
+    name
+    description
+    isActive
+  }
+}
+```
+
+**Copy a qualification ID** for use in Step 5.
+
+### Step 2: Send OTP
+
 ```graphql
 mutation SendOTP($mobileNumber: String!) {
   sendOTP(mobileNumber: $mobileNumber) {
@@ -79,14 +130,18 @@ mutation SendOTP($mobileNumber: String!) {
   }
 }
 ```
+
 **Variables:**
 ```json
 {
-  "mobileNumber": "+1234567890"
+  "mobileNumber": "+919876543210"
 }
 ```
 
-#### 2. Verify OTP
+**Check server console** for OTP code (in production, this would be sent via SMS).
+
+### Step 3: Verify OTP & Get Token
+
 ```graphql
 mutation VerifyOTP($mobileNumber: String!, $code: String!) {
   verifyOTP(mobileNumber: $mobileNumber, code: $code) {
@@ -97,38 +152,82 @@ mutation VerifyOTP($mobileNumber: String!, $code: String!) {
       id
       mobileNumber
       isVerified
+      status
       name
-      gender
     }
   }
 }
 ```
+
 **Variables:**
 ```json
 {
-  "mobileNumber": "+1234567890",
+  "mobileNumber": "+919876543210",
   "code": "123456"
 }
 ```
 
-#### 3. Complete Onboarding
+**Copy the token** from the response for authenticated requests.
+
+### Step 4: Get Current User Profile (Protected)
+
+```graphql
+query GetMe {
+  me {
+    id
+    mobileNumber
+    isVerified
+    status
+    name
+    gender
+    dateOfBirth
+    qualification {
+      id
+      name
+      description
+    }
+    course
+    specialization
+    latitude
+    longitude
+    createdAt
+  }
+}
+```
+
+**HTTP Headers:**
+```json
+{
+  "Authorization": "Bearer YOUR_JWT_TOKEN_HERE"
+}
+```
+
+### Step 5: Complete Onboarding (Protected)
+
 ```graphql
 mutation CompleteOnboarding($input: OnboardingInput!) {
   completeOnboarding(input: $input) {
     id
     mobileNumber
     isVerified
+    status
     name
     gender
     dateOfBirth
-    qualification
+    qualification {
+      id
+      name
+      description
+    }
     course
     specialization
     latitude
     longitude
+    createdAt
   }
 }
 ```
+
 **Variables:**
 ```json
 {
@@ -136,118 +235,193 @@ mutation CompleteOnboarding($input: OnboardingInput!) {
     "name": "John Doe",
     "gender": "MALE",
     "dateOfBirth": "1995-05-15",
-    "qualification": "BACHELORS",
+    "qualificationId": "your-qualification-id-from-step-1",
     "course": "Computer Science",
-    "specialization": "Software Engineering",
+    "specialization": "Artificial Intelligence",
     "latitude": 12.9716,
     "longitude": 77.5946
   }
 }
 ```
+
 **HTTP Headers:**
 ```json
 {
-  "Authorization": "Bearer your-jwt-token-here"
+  "Authorization": "Bearer YOUR_JWT_TOKEN_HERE"
 }
 ```
 
-#### 4. Get Current User
-```graphql
-query GetMyProfile {
-  me {
-    id
-    mobileNumber
-    isVerified
-    name
-    gender
-    dateOfBirth
-    qualification
-    course
-    specialization
-    latitude
-    longitude
-  }
-}
-```
-**HTTP Headers:**
-```json
-{
-  "Authorization": "Bearer your-jwt-token-here"
-}
-```
+After completion, user status changes from `ONBOARDING_INCOMPLETE` to `ACTIVE`.
 
-## 🔍 Understanding the Code
+## 🔍 Project Structure
 
-### Project Structure
 ```
 ├── src/
 │   ├── graphql/
 │   │   ├── schema.ts              # GraphQL type definitions
 │   │   └── resolvers/
-│   │       ├── index.ts           # Resolver exports (imports only)
-│   │       ├── queries.ts         # Query resolvers
-│   │       └── mutations.ts       # Mutation resolvers
+│   │       ├── index.ts           # Resolver exports
+│   │       ├── queries.ts         # Query resolvers (me, qualifications)
+│   │       └── mutations.ts       # Mutation resolvers (sendOTP, verifyOTP, etc.)
 │   ├── services/
 │   │   ├── auth.service.ts        # JWT authentication logic
 │   │   ├── otp.service.ts         # OTP generation & verification
 │   │   └── user.service.ts        # User management
 │   ├── middleware/
 │   │   └── auth.middleware.ts     # Authentication middleware
+│   ├── types/
+│   │   ├── index.ts               # Central type exports
+│   │   ├── context.types.ts       # GraphQL context types
+│   │   ├── auth.types.ts          # Authentication types
+│   │   └── user.types.ts          # User-related types
 │   ├── lib/
 │   │   └── prisma.ts              # Prisma client instance
 │   └── index.ts                   # Server entry point
 ├── prisma/
-│   └── schema.prisma              # Database schema (User table + enums)
+│   ├── schema.prisma              # Database schema
+│   └── migrations/                # Database migrations
+├── TESTING_GUIDE.md               # Detailed testing guide
+├── GRAPHQL_QUERIES_WITH_VARIABLES.md  # All queries with variables
+├── MIGRATION_GUIDE.md             # Migration documentation
 └── package.json
 ```
 
-### Key Concepts
+## 🎯 Key Architecture Decisions
 
-1. **Single Table Design**: All user data (auth, OTP, profile) in one User table
-2. **Enum Types**: Gender and Qualification use database enums for data consistency
-3. **OTP Service**: Generates 6-digit codes, stores in User table with expiration (10 min)
-4. **Auth Middleware**: Extracts JWT token from Authorization header and adds user to context
-5. **Split Resolvers**: Queries and mutations are in separate files for better organization
-6. **Context-based Auth**: Protected routes use context.user instead of token parameters
+### 1. Prisma via Context
+All services receive Prisma client as a parameter from GraphQL context:
+```typescript
+// ✅ Good - Prisma passed via context
+static async sendOTP(mobileNumber: string, prisma: PrismaClient) {
+  await prisma.user.create({ ... });
+}
 
-## 🧪 Testing with Apollo Studio
+// ❌ Bad - Direct import
+import { prisma } from '../lib/prisma';
+```
 
-1. Open `http://localhost:4000` in your browser
-2. Copy queries from `sample-queries.graphql`
-3. Use the **Variables** tab to provide input values
-4. For authenticated requests (completeOnboarding, me), add token in **HTTP Headers** tab:
-   ```json
-   { "Authorization": "Bearer YOUR_TOKEN_HERE" }
-   ```
-5. Follow the authentication flow in order: sendOTP → verifyOTP → completeOnboarding → me
-6. Use enum values: Gender (MALE, FEMALE, OTHER), Qualification (HIGH_SCHOOL, DIPLOMA, BACHELORS, MASTERS, PHD, OTHER)
+### 2. Type Safety
+No `any` types used - everything is properly typed:
+```typescript
+// ✅ Good
+const { message } = error as Error;
+async (_: unknown, { input }: { input: OnboardingData }, context: GraphQLContext)
+
+// ❌ Bad
+catch (error: any)
+async (_: any, { input }: any, context: any)
+```
+
+### 3. Error Logging
+Proper destructuring for clean logs:
+```typescript
+// ✅ Good
+const { message } = error as Error;
+console.error('Failed to send OTP:', { message, mobileNumber });
+
+// ❌ Bad
+console.error('Error:', error);
+```
+
+### 4. Separate Models
+- **OTP Model**: Tracks OTP history, better audit trail
+- **Qualification Model**: Dynamic management via API, not hardcoded enum
+
+### 5. User Status Lifecycle
+```
+PENDING_VERIFICATION → ONBOARDING_INCOMPLETE → ACTIVE
+                    ↓
+              INACTIVE / SUSPENDED
+```
+
+## 🧪 Testing
+
+### Using GraphQL Playground
+1. Open `http://localhost:4000` in browser
+2. Use queries from `GRAPHQL_QUERIES_WITH_VARIABLES.md`
+3. Add variables in the Variables panel
+4. For protected routes, add token in HTTP Headers tab
+
+### Using Postman
+See `GRAPHQL_QUERIES_WITH_VARIABLES.md` for Postman setup and examples.
+
+### Complete Testing Flow
+See `TESTING_GUIDE.md` for:
+- Step-by-step testing instructions
+- Expected responses
+- Error case testing
+- Postman collection format
+
+## 🔐 Security Features
+
+- ✅ OTPs expire after 10 minutes
+- ✅ OTPs can only be used once (tracked in separate OTP model)
+- ✅ JWT tokens expire in 30 days
+- ✅ Mobile numbers are unique per user
+- ✅ Protected routes require valid JWT token
+- ✅ User status tracking for access control
+- ✅ Proper error handling without exposing sensitive data
 
 ## 📱 Production Considerations
 
-- **SMS Integration**: Replace console.log in `otp.service.ts` with actual SMS service (Twilio, AWS SNS)
-- **Rate Limiting**: Add rate limiting for OTP requests
-- **Security**: Use strong JWT secrets, implement refresh tokens
-- **Validation**: Add more robust input validation
-- **Error Handling**: Implement comprehensive error handling
+### Must Implement
+1. **SMS Integration**: Replace console.log with actual SMS service (Twilio, AWS SNS, etc.)
+2. **Rate Limiting**: Prevent OTP spam
+3. **Refresh Tokens**: Implement token refresh mechanism
+4. **Input Validation**: Add comprehensive validation
+5. **Logging**: Use proper logging service (Winston, Pino)
 
-## 🔐 Security Notes
+### Security Enhancements
+1. Change `JWT_SECRET` to a strong random value
+2. Use environment-specific secrets
+3. Implement HTTPS in production
+4. Add CORS configuration
+5. Implement request throttling
+6. Add IP-based rate limiting for OTP requests
 
-- OTPs expire after 10 minutes
-- OTPs can only be used once (stored in User table)
-- JWT tokens expire in 30 days
-- Mobile numbers are unique per user
-- Authentication via middleware (Bearer token in Authorization header)
-- Protected routes require valid JWT token in context
-- Enum types ensure data consistency for gender and qualification
+### Database Optimization
+1. Add indexes for frequently queried fields
+2. Implement database connection pooling
+3. Add database query logging
+4. Set up database backups
 
-## 📚 Next Steps
+## 🐛 Common Issues
 
-After completing these APIs, you can:
-- Add more user fields to the User table
-- Implement profile update mutations
-- Add file upload for profile pictures
-- Integrate SMS service (Twilio, AWS SNS) for real OTP delivery
-- Add rate limiting for OTP requests
-- Create additional features based on requirements
+### "Invalid signature" Error
+**Cause**: Using old JWT token generated with different secret.  
+**Solution**: Get a new token by verifying OTP again.
 
+### TypeScript Errors in VS Code
+**Cause**: TypeScript server using cached Prisma types.  
+**Solution**: Reload VS Code window or restart TypeScript server.
 
+### OTP Not Working
+**Cause**: OTP expired (10 minutes) or already used.  
+**Solution**: Request a new OTP.
+
+## 📚 Additional Documentation
+
+- `TESTING_GUIDE.md` - Complete testing guide with all scenarios
+- `GRAPHQL_QUERIES_WITH_VARIABLES.md` - All queries with variable examples
+- `MIGRATION_GUIDE.md` - Database migration guide and breaking changes
+
+## 🚀 Next Steps
+
+1. Integrate real SMS service for OTP delivery
+2. Add profile update mutations
+3. Implement file upload for profile pictures
+4. Add admin panel for qualification management
+5. Implement user search and filtering
+6. Add pagination for list queries
+7. Create user deactivation/suspension flows
+8. Add email verification as secondary authentication
+9. Implement password-based login as alternative
+10. Add social login (Google, Facebook, etc.)
+
+## 📄 License
+
+MIT
+
+## 👥 Contributing
+
+Contributions are welcome! Please follow the existing code structure and type safety patterns.
