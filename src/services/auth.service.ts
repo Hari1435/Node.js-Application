@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { prisma } from '../lib/prisma';
+import { PrismaClient, User } from '@prisma/client';
+import { JWTPayload } from '../types';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
 
@@ -10,16 +11,18 @@ export class AuthService {
   }
 
   // Verify JWT token
-  static verifyToken(token: string): { userId: string } | null {
+  static verifyToken(token: string): JWTPayload | null {
     try {
-      return jwt.verify(token, JWT_SECRET) as { userId: string };
+      return jwt.verify(token, JWT_SECRET) as JWTPayload;
     } catch (error) {
+      const { message } = error as Error;
+      console.error('Token verification failed:', { message });
       return null;
     }
   }
 
   // Get user from token
-  static async getUserFromToken(token: string) {
+  static async getUserFromToken(token: string, prisma: PrismaClient): Promise<User> {
     const decoded = this.verifyToken(token);
     if (!decoded) {
       throw new Error('Invalid token');
@@ -27,6 +30,9 @@ export class AuthService {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
+      include: {
+        qualification: true,
+      },
     });
 
     if (!user) {

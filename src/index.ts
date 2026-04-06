@@ -4,11 +4,12 @@ import { typeDefs } from './graphql/schema';
 import { resolvers } from './graphql/resolvers';
 import { prisma } from './lib/prisma';
 import { authMiddleware } from './middleware/auth.middleware';
+import { GraphQLContext } from './types';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const server = new ApolloServer({
+const server = new ApolloServer<GraphQLContext>({
   typeDefs,
   resolvers,
 });
@@ -16,9 +17,9 @@ const server = new ApolloServer({
 async function startServer() {
   const { url } = await startStandaloneServer(server, {
     listen: { port: Number(process.env.PORT) || 4000 },
-    context: async ({ req }) => {
+    context: async ({ req }): Promise<GraphQLContext> => {
       // Apply auth middleware
-      const authContext = await authMiddleware(req);
+      const authContext = await authMiddleware(req, prisma);
       
       return {
         prisma,
@@ -32,6 +33,7 @@ async function startServer() {
 }
 
 startServer().catch((error) => {
-  console.error('Error starting server:', error);
+  const { message, stack } = error as Error;
+  console.error('Error starting server:', { message, stack });
   process.exit(1);
 });
