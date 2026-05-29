@@ -5,19 +5,27 @@ export const typeDefs = `#graphql
     OTHER
   }
 
-  enum Qualification {
-    HIGH_SCHOOL
-    DIPLOMA
-    BACHELORS
-    MASTERS
-    PHD
-    OTHER
+  enum UserStatus {
+    PENDING_VERIFICATION
+    VERIFIED
+    ONBOARDING_INCOMPLETE
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+  }
+
+  type Qualification {
+    id: ID!
+    name: String!
+    description: String
+    isActive: Boolean!
   }
 
   type User {
     id: ID!
     mobileNumber: String!
     isVerified: Boolean!
+    status: UserStatus!
     name: String
     gender: Gender
     dateOfBirth: String
@@ -46,15 +54,21 @@ export const typeDefs = `#graphql
     name: String!
     gender: Gender!
     dateOfBirth: String!
-    qualification: Qualification!
+    qualificationId: String!
     course: String!
     specialization: String!
     latitude: Float!
     longitude: Float!
   }
 
+  input CreateQualificationInput {
+    name: String!
+    description: String
+  }
+
   type Query {
     me: User
+    qualifications: [Qualification!]!
   }
 
   type Mutation {
@@ -66,5 +80,8 @@ export const typeDefs = `#graphql
     
     # Step 3: Complete onboarding
     completeOnboarding(input: OnboardingInput!): User!
+    
+    # Admin: Create qualification
+    createQualification(input: CreateQualificationInput!): Qualification!
   }
 `;

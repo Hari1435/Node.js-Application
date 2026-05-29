@@ -1,12 +1,17 @@
 import { OTPService } from '../../services/otp.service';
 import { AuthService } from '../../services/auth.service';
 import { UserService } from '../../services/user.service';
-import { prisma } from '../../lib/prisma';
 import { GraphQLError } from 'graphql';
+import { GraphQLContext, OnboardingData } from '../../types';
+
+interface CreateQualificationInput {
+  name: string;
+  description?: string;
+}
 
 export const mutations = {
   // Step 1: Send OTP to mobile number
-  sendOTP: async (_: any, { mobileNumber }: { mobileNumber: string }) => {
+  sendOTP: async (_: unknown, { mobileNumber }: { mobileNumber: string }, context: GraphQLContext) => {
     try {
       // Validate mobile number format (basic validation)
       if (!/^\+?[1-9]\d{9,14}$/.test(mobileNumber)) {
@@ -16,13 +21,15 @@ export const mutations = {
         };
       }
 
-      await OTPService.sendOTP(mobileNumber);
+      await OTPService.sendOTP(mobileNumber, context.prisma);
 
       return {
         success: true,
         message: 'OTP sent successfully',
       };
     } catch (error) {
+      const { message } = error as Error;
+      console.error('Failed to send OTP:', { message, mobileNumber });
       return {
         success: false,
         message: 'Failed to send OTP',
@@ -32,11 +39,12 @@ export const mutations = {
 
   // Step 2: Verify OTP and return token
   verifyOTP: async (
-    _: any,
-    { mobileNumber, code }: { mobileNumber: string; code: string }
+    _: unknown,
+    { mobileNumber, code }: { mobileNumber: string; code: string },
+    context: GraphQLContext
   ) => {
     try {
-      const isValid = await OTPService.verifyOTP(mobileNumber, code);
+      const isValid = await OTPService.verifyOTP(mobileNumber, code, context.prisma);
 
       if (!isValid) {
         return {
@@ -46,8 +54,11 @@ export const mutations = {
       }
 
       // Get user
-      const user = await prisma.user.findUnique({
+      const user = await context.prisma.user.findUnique({
         where: { mobileNumber },
+        include: {
+          qualification: true,
+        },
       });
 
       if (!user) {
@@ -67,6 +78,8 @@ export const mutations = {
         user,
       };
     } catch (error) {
+      const { message } = error as Error;
+      console.error('OTP verification failed:', { message, mobileNumber });
       return {
         success: false,
         message: 'Verification failed',
@@ -76,9 +89,9 @@ export const mutations = {
 
   // Step 3: Complete onboarding
   completeOnboarding: async (
-    _: any,
-    { input }: { input: any },
-    context: any
+    _: unknown,
+    { input }: { input: OnboardingData },
+    context: GraphQLContext
   ) => {
     try {
       if (!context.user) {
@@ -88,11 +101,50 @@ export const mutations = {
       }
 
       // Complete onboarding
-      const user = await UserService.completeOnboarding(context.user.id, input);
+      const user = await UserService.completeOnboarding(context.user.id, input, context.prisma);
 
       return user;
-    } catch (error: any) {
-      throw new GraphQLError(error.message || 'Failed to complete onboarding', {
+    } catch (error) {
+      const { message } = error as Error;
+      console.error('Onboarding failed:', { message, userId: context.user?.id });
+      throw new GraphQLError(message || 'Failed to complete onboarding', {
+        extensions: { code: 'BAD_REQUEST' },
+      });
+    }
+  },
+
+  // Admin: Create qualification
+  createQualification: async (
+    _: unknown,
+    { input }: { input: CreateQualificationInput },
+    context: GraphQLContext
+  ) => {
+    try {
+      // Check if qualification with same name already exists
+      const existing = await context.prisma.qualification.findUnique({
+        where: { name: input.name },
+      });
+
+      if (existing) {
+        throw new GraphQLError('Qualification with this name already exists', {
+          extensions: { code: 'BAD_REQUEST' },
+        });
+      }
+
+      // Create new qualification
+      const qualification = await context.prisma.qualification.create({
+        data: {
+          name: input.name,
+          description: input.description || null,
+          isActive: true,
+        },
+      });
+
+      return qualification;
+    } catch (error) {
+      const { message } = error as Error;
+      console.error('Failed to create qualification:', { message, input });
+      throw new GraphQLError(message || 'Failed to create qualification', {
         extensions: { code: 'BAD_REQUEST' },
       });
     }

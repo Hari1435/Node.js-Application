@@ -1,20 +1,9 @@
-import { prisma } from '../lib/prisma';
-import { Gender, Qualification } from '@prisma/client';
-
-interface OnboardingData {
-  name: string;
-  gender: Gender;
-  dateOfBirth: string;
-  qualification: Qualification;
-  course: string;
-  specialization: string;
-  latitude: number;
-  longitude: number;
-}
+import { PrismaClient, User, UserStatus } from '@prisma/client';
+import { OnboardingData } from '../types';
 
 export class UserService {
   // Complete user onboarding
-  static async completeOnboarding(userId: string, data: OnboardingData) {
+  static async completeOnboarding(userId: string, data: OnboardingData, prisma: PrismaClient): Promise<User> {
     // Check if user already completed onboarding
     const existingUser = await prisma.user.findUnique({
       where: { id: userId },
@@ -35,11 +24,15 @@ export class UserService {
         name: data.name,
         gender: data.gender,
         dateOfBirth: new Date(data.dateOfBirth),
-        qualification: data.qualification,
+        qualificationId: data.qualificationId,
         course: data.course,
         specialization: data.specialization,
         latitude: data.latitude,
         longitude: data.longitude,
+        status: UserStatus.ACTIVE,
+      },
+      include: {
+        qualification: true,
       },
     });
 
@@ -47,9 +40,12 @@ export class UserService {
   }
 
   // Get user by ID
-  static async getUserById(userId: string) {
+  static async getUserById(userId: string, prisma: PrismaClient): Promise<User | null> {
     return await prisma.user.findUnique({
       where: { id: userId },
+      include: {
+        qualification: true,
+      },
     });
   }
 }

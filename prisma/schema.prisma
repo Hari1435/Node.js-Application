@@ -13,37 +13,63 @@ enum Gender {
   OTHER
 }
 
-enum Qualification {
-  HIGH_SCHOOL
-  DIPLOMA
-  BACHELORS
-  MASTERS
-  PHD
-  OTHER
+enum UserStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  ONBOARDING_INCOMPLETE
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model Qualification {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  users       User[]
+}
+
+model OTP {
+  id           String    @id @default(uuid())
+  userId       String
+  code         String
+  expiresAt    DateTime
+  isUsed       Boolean   @default(false)
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([code])
 }
 
 model User {
   id              String          @id @default(uuid())
   mobileNumber    String          @unique
   isVerified      Boolean         @default(false)
-  
-  // OTP fields
-  otpCode         String?
-  otpExpiresAt    DateTime?
-  otpIsUsed       Boolean         @default(false)
+  status          UserStatus      @default(PENDING_VERIFICATION)
   
   // Profile fields
   name            String?
   gender          Gender?
   dateOfBirth     DateTime?
-  qualification   Qualification?
+  qualificationId String?
   course          String?
   specialization  String?
   latitude        Float?
   longitude       Float?
   
+  qualification   Qualification?  @relation(fields: [qualificationId], references: [id])
+  otps            OTP[]
+  
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   
   @@index([mobileNumber])
+  @@index([qualificationId])
 }
